@@ -111,7 +111,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         isGenerating: true,
         error: null,
         showResult: false,
-        progress: 0.1,
         generatedImageUrls: [],
         originalImageId: null,
       ),
@@ -129,7 +128,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         bytes: originalBytes,
         directory: 'original_images',
       );
-      emit(state.copyWith(progress: 0.35));
       if (originalUrl.isEmpty) {
         throw Exception('Upload returned an empty download URL');
       }
@@ -141,7 +139,7 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         categoryId: state.categoryId!,
         categoryName: state.categoryName ?? '',
       );
-      emit(state.copyWith(progress: 0.45, originalImageId: originalDocId));
+      emit(state.copyWith(originalImageId: originalDocId));
 
       // 3) Call Cloud Function to generate new images
       final generatedImageBytes = await _generateImagesFromFunction(
@@ -149,7 +147,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         baseImageBytes: originalBytes,
         mimeType: mimeType,
       );
-      emit(state.copyWith(progress: 0.65));
 
       // 4) Upload generated images to storage
       final generatedUrls = await _uploadGeneratedImages(
@@ -158,7 +155,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         originalDocId,
         mimeType,
       );
-      emit(state.copyWith(progress: 0.8));
 
       // 5) Save generated image records
       await _saveGeneratedImagesRecords(
@@ -168,7 +164,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         categoryName: state.categoryName ?? '',
         urls: generatedUrls,
       );
-      emit(state.copyWith(progress: 0.9));
 
       // 6) Fetch generated images for display
       final fetched = await _fetchGeneratedImages(
@@ -181,7 +176,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
           isLoading: false,
           showResult: true,
           isGenerating: false,
-          progress: 1.0,
           generatedImageUrls: fetched,
           originalImageId: originalDocId,
         ),
@@ -193,7 +187,6 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
           isLoading: false,
           isGenerating: false,
           error: e.toString(),
-          progress: 0.0,
         ),
       );
     }
