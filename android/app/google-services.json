@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "766656959444",
+    "project_id": "photo-remix-53211",
+    "storage_bucket": "photo-remix-53211.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:766656959444:android:6050026d8f4412a588fc41",
+        "android_client_info": {
+          "package_name": "com.photo_remix"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAjZlAUaYzxaPwor0g8bUFGEBwrpa32s_Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
