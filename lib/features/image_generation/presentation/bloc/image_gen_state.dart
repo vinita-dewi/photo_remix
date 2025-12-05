@@ -9,6 +9,8 @@ class ImageGenState extends Equatable {
   final String? categoryName;
   final bool showResult;
   final double progress;
+  final List<String> generatedImageUrls;
+  final String? originalImageId;
 
   const ImageGenState({
     this.imagePath,
@@ -19,6 +21,8 @@ class ImageGenState extends Equatable {
     this.categoryName,
     this.showResult = false,
     this.progress = 0.0,
+    this.generatedImageUrls = const [],
+    this.originalImageId,
   });
 
   factory ImageGenState.initial() => const ImageGenState();
@@ -32,6 +36,8 @@ class ImageGenState extends Equatable {
     String? categoryName,
     bool? showResult,
     double? progress,
+    List<String>? generatedImageUrls,
+    String? originalImageId,
   }) {
     return ImageGenState(
       imagePath: imagePath ?? this.imagePath,
@@ -42,6 +48,8 @@ class ImageGenState extends Equatable {
       categoryName: categoryName ?? this.categoryName,
       showResult: showResult ?? this.showResult,
       progress: progress ?? this.progress,
+      generatedImageUrls: generatedImageUrls ?? this.generatedImageUrls,
+      originalImageId: originalImageId ?? this.originalImageId,
     );
   }
 
@@ -55,5 +63,7 @@ class ImageGenState extends Equatable {
         categoryName,
         showResult,
         progress,
+        generatedImageUrls,
+        originalImageId,
       ];
 }

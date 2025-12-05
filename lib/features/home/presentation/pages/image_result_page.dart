@@ -30,84 +30,86 @@ class ImageResultPage extends StatelessWidget {
         }
 
         final image = File(state.imagePath!);
+        final generatedUrls = state.generatedImageUrls;
 
-        return Padding(
-          padding: EdgeInsets.all(16.px),
-          child: Column(
-            children: [
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  'Original Image',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Gap.h(16),
-              Center(
-                child: Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18.px),
+        return Container(
+          color: AppColors.onPrimary,
+          child: Padding(
+            padding: EdgeInsets.all(16.px),
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Original Image',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: EdgeInsets.all(10.px),
-                    child: SizedBox(
-                      width: targetSize,
-                      height: targetSize,
-                      child: ClipRRect(
-                        borderRadius: borderRadius,
-                        child: Image.file(image, fit: BoxFit.cover),
-                      ),
+                ),
+                Gap.h(16),
+                Center(
+                  child: SizedBox(
+                    width: targetSize,
+                    height: targetSize,
+                    child: ClipRRect(
+                      borderRadius: borderRadius,
+                      child: Image.file(image, fit: BoxFit.cover),
                     ),
                   ),
                 ),
-              ),
-              Gap.h(20),
-              Align(
-                alignment: Alignment.center,
-                child: Text(
-                  'Generated Image',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              Gap.h(20),
-              Expanded(
-                child: GridView.builder(
-                  itemCount: 4,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
+                Gap.h(20),
+                Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Generated Image',
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  itemBuilder: (context, index) {
-                    return Card(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18.px),
-                      ),
-                      elevation: 2,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18.px),
-                        child: Container(
-                          color: AppColors.border.withOpacity(0.2),
-                          child: Image.file(image, fit: BoxFit.cover),
+                ),
+                Gap.h(20),
+                Expanded(
+                  child: GridView.builder(
+                    itemCount: 4,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 12,
+                          crossAxisSpacing: 12,
                         ),
-                      ),
-                    );
-                  },
+                    itemBuilder: (context, index) {
+                      final hasGenerated =
+                          generatedUrls.isNotEmpty &&
+                          index < generatedUrls.length;
+                      final widget = hasGenerated
+                          ? Image.network(
+                              generatedUrls[index],
+                              fit: BoxFit.cover,
+                            )
+                          : Image.file(image, fit: BoxFit.cover);
+                      return ClipRRect(
+                        borderRadius: borderRadius,
+                        child: Container(
+                          color:
+                              Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerHighest,
+                          child: widget,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-              Gap.h(8),
-              SafeArea(
-                top: false,
-                child: PrimaryButton(
-                  onPressed: () {
-                    context.read<ImageGenBloc>().add(const ClearImage());
-                    Navigator.of(context).maybePop();
-                  },
-                  label: 'Generate New Image!',
+                Gap.h(8),
+                SafeArea(
+                  top: false,
+                  child: PrimaryButton(
+                    onPressed: () {
+                      context.read<ImageGenBloc>().add(const ClearImage());
+                      Navigator.of(context).maybePop();
+                    },
+                    label: 'Generate New Image!',
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

@@ -70,7 +70,7 @@ class ImagePickerCard extends StatelessWidget {
             Gap.h(12),
             BlocBuilder<ImageGenBloc, ImageGenState>(
               builder: (context, state) {
-                if (state.isLoading) {
+                if (state.isLoading && state.imagePath != null) {
                   return SizedBox(
                     height: targetHeight,
                     child: const Center(child: CircularProgressIndicator()),

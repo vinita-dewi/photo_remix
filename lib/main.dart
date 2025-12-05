@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -35,6 +36,12 @@ Future<void> _configureEmulators() async {
   // Log the host/port we target; useful when debugging emulator connectivity.
   debugPrint('Using storage emulator at $storageHost:$storageEmulatorPort');
   FirebaseStorage.instance.useStorageEmulator(storageHost, storageEmulatorPort);
+
+  // Point Functions at the emulator for local development.
+  const functionsPort = 5001;
+  final functionsHost = storageHost; // reuse the same host resolution
+  debugPrint('Using functions emulator at $functionsHost:$functionsPort');
+  FirebaseFunctions.instance.useFunctionsEmulator(functionsHost, functionsPort);
 }
 
 class MyApp extends StatelessWidget {

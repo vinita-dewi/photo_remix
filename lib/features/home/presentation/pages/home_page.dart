@@ -6,7 +6,7 @@ import 'package:photo_remix/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:photo_remix/features/auth/presentation/bloc/auth_state.dart';
 import 'package:photo_remix/features/home/presentation/bloc/home_bloc.dart';
 import 'package:photo_remix/features/home/presentation/bloc/home_state.dart';
-import 'package:photo_remix/features/home/presentation/widgets/primary_button.dart';
+import 'package:photo_remix/features/home/presentation/widgets/error_bottom_sheet.dart';
 import 'package:photo_remix/features/image_generation/presentation/bloc/image_gen_bloc.dart';
 import 'package:photo_remix/features/image_generation/presentation/bloc/image_gen_event.dart';
 import 'package:photo_remix/features/image_generation/presentation/bloc/image_gen_state.dart';
@@ -44,8 +44,19 @@ class HomePage extends StatelessWidget {
             listenWhen: (prev, curr) => prev.error != curr.error,
             listener: (context, imageState) async {
               if (imageState.error != null) {
-                await _showErrorBottomSheet(context);
-                context.read<ImageGenBloc>().add(const ClearImage());
+                await _showErrorBottomSheet(
+                  context,
+                  onRetry: () {
+                    Navigator.of(context).pop();
+                    if (imageState.imagePath != null &&
+                        imageState.categoryId != null) {
+                      context.read<ImageGenBloc>().add(
+                        const GenerateImageRequested(),
+                      );
+                    }
+                  },
+                  onClose: () => Navigator.of(context).pop(),
+                );
               }
             },
             child: BlocBuilder<HomeBloc, HomeState>(
@@ -84,37 +95,16 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Future<void> _showErrorBottomSheet(BuildContext context) {
+  Future<void> _showErrorBottomSheet(
+    BuildContext context, {
+    required VoidCallback onRetry,
+    required VoidCallback onClose,
+  }) {
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: false,
       builder: (ctx) {
-        return SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.all(16.px),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Image Generation Failed',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                Gap.h(8),
-                Text(
-                  'Something went wrong, Try again later!',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                Gap.h(16),
-                PrimaryButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  label: 'Close',
-                ),
-              ],
-            ),
-          ),
-        );
+        return ErrorBottomSheet(onClose: onClose, onRetry: onRetry);
       },
     );
   }
