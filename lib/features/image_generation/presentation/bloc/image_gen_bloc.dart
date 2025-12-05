@@ -37,7 +37,7 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
     PickFromGallery event,
     Emitter<ImageGenState> emit,
   ) async {
-    emit(state.copyWith(isLoading: true, error: null));
+    emit(state.copyWith(isLoading: true, error: null, isGenerating: false));
     try {
       final file = await _picker.pickImage(source: ImageSource.gallery);
       if (file == null) {
@@ -55,7 +55,7 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
     PickFromCamera event,
     Emitter<ImageGenState> emit,
   ) async {
-    emit(state.copyWith(isLoading: true, error: null));
+    emit(state.copyWith(isLoading: true, error: null, isGenerating: false));
     try {
       final file = await _picker.pickImage(source: ImageSource.camera);
       if (file == null) {
@@ -97,16 +97,44 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
       return;
     }
 
-    emit(state.copyWith(isLoading: true, error: null, showResult: false));
+    emit(
+      state.copyWith(
+        isLoading: true,
+        isGenerating: true,
+        error: null,
+        showResult: false,
+        progress: 0.1,
+      ),
+    );
 
     try {
       final downloadUrl = await _uploadImage(state.imagePath!, user.uid);
-      await _saveImageRecord(
-        userId: user.uid,
-        downloadUrl: downloadUrl,
-        categoryId: state.categoryId!,
-        categoryName: state.categoryName ?? '',
-      );
+      emit(state.copyWith(progress: 0.6));
+      if (downloadUrl.isEmpty) {
+        throw Exception('Upload returned an empty download URL');
+      }
+
+      try {
+        await _saveImageRecord(
+          userId: user.uid,
+          downloadUrl: downloadUrl,
+          categoryId: state.categoryId!,
+          categoryName: state.categoryName ?? '',
+        );
+        emit(state.copyWith(progress: 0.85));
+      } catch (e, s) {
+        _log.e('saving image record failed', error: e, stackTrace: s);
+        emit(
+          state.copyWith(
+            isLoading: false,
+            isGenerating: false,
+            error: 'Failed to save image metadata: $e',
+            progress: 0.0,
+          ),
+        );
+        return;
+      }
+
       _generateImage(
         category: Category(
           id: state.categoryId!,
@@ -114,10 +142,24 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         ),
         emit: emit,
       );
-      emit(state.copyWith(isLoading: false, showResult: true));
+      emit(
+        state.copyWith(
+          isLoading: false,
+          showResult: true,
+          isGenerating: false,
+          progress: 1.0,
+        ),
+      );
     } catch (e, s) {
       _log.e('generate image failed', error: e, stackTrace: s);
-      emit(state.copyWith(isLoading: false, error: e.toString()));
+      emit(
+        state.copyWith(
+          isLoading: false,
+          isGenerating: false,
+          error: e.toString(),
+          progress: 0.0,
+        ),
+      );
     }
   }
 
@@ -159,9 +201,29 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
       final contentType =
           ext.toLowerCase().contains('png') ? 'image/png' : 'image/jpeg';
       final metadata = SettableMetadata(contentType: contentType);
-      _log.i('Uploading image', error: null, stackTrace: null);
-      final task = await ref.putData(bytes, metadata);
-      return await task.ref.getDownloadURL();
+      _log.i('Uploading image to ${ref.fullPath}');
+
+      final task = ref.putData(bytes, metadata);
+      final snapshot = await task.timeout(
+        const Duration(seconds: 20),
+        onTimeout:
+            () =>
+                throw Exception(
+                  'Upload timed out. Is the storage emulator running?',
+                ),
+      );
+
+      final downloadUrl = await snapshot.ref.getDownloadURL().timeout(
+        const Duration(seconds: 10),
+        onTimeout:
+            () =>
+                throw Exception(
+                  'Download URL timed out. Is the storage emulator reachable?',
+                ),
+      );
+
+      _log.i('Upload complete. downloadUrl: $downloadUrl');
+      return downloadUrl;
     } on FirebaseException catch (e) {
       _log.e('upload failed for $path', error: e);
       throw Exception(e.message ?? 'Upload failed');

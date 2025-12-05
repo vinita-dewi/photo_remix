@@ -9,6 +9,17 @@
             "request": "launch",
             "type": "dart",
             "flutterMode": "debug",
+            "args": ["--dart-define=STORAGE_EMULATOR_HOST=10.0.2.2"]
+        },
+        {
+            "name": "photo_remix (Debug, software rendering)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "debug",
+            "args": [
+                "--dart-define=STORAGE_EMULATOR_HOST=10.0.2.2",
+                "--enable-software-rendering"
+            ]
         },
         {
             "name": "photo_remix (profile mode)",

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:photo_remix/core/theme/app_colors.dart';
 import 'package:photo_remix/core/utils/gap.dart';
 import 'package:photo_remix/features/home/presentation/widgets/primary_button.dart';
 import 'package:photo_remix/features/image_generation/presentation/bloc/image_gen_bloc.dart';
@@ -14,7 +15,9 @@ class ImageResultPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final targetHeight = MediaQuery.of(context).size.height * 0.33;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final targetSize = screenWidth * 0.33;
+    final borderRadius = BorderRadius.circular(14.px);
     return BlocBuilder<ImageGenBloc, ImageGenState>(
       builder: (context, state) {
         if (state.isLoading) {
@@ -26,29 +29,83 @@ class ImageResultPage extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
+        final image = File(state.imagePath!);
+
         return Padding(
           padding: EdgeInsets.all(16.px),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Image Result',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              Gap.h(12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14.px),
-                child: Image.file(
-                  File(state.imagePath!),
-                  fit: BoxFit.cover,
-                  height: targetHeight,
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  'Original Image',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-              Gap.h(12),
-              PrimaryButton(
-                onPressed:
-                    () => context.read<ImageGenBloc>().add(const ClearImage()),
-                label: 'Generate Another',
+              Gap.h(16),
+              Center(
+                child: Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.px),
+                  ),
+                  elevation: 2,
+                  child: Padding(
+                    padding: EdgeInsets.all(10.px),
+                    child: SizedBox(
+                      width: targetSize,
+                      height: targetSize,
+                      child: ClipRRect(
+                        borderRadius: borderRadius,
+                        child: Image.file(image, fit: BoxFit.cover),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Gap.h(20),
+              Align(
+                alignment: Alignment.center,
+                child: Text(
+                  'Generated Image',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Gap.h(20),
+              Expanded(
+                child: GridView.builder(
+                  itemCount: 4,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                  ),
+                  itemBuilder: (context, index) {
+                    return Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18.px),
+                      ),
+                      elevation: 2,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18.px),
+                        child: Container(
+                          color: AppColors.border.withOpacity(0.2),
+                          child: Image.file(image, fit: BoxFit.cover),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Gap.h(8),
+              SafeArea(
+                top: false,
+                child: PrimaryButton(
+                  onPressed: () {
+                    context.read<ImageGenBloc>().add(const ClearImage());
+                    Navigator.of(context).maybePop();
+                  },
+                  label: 'Generate New Image!',
+                ),
               ),
             ],
           ),
