@@ -2,6 +2,12 @@
 
 Flutter app that lets a signed-in Firebase user upload an image, call a Cloud Function to generate transformed images via Hugging Face Inference, and view the generated results. Storage uses the Firebase Storage emulator; Firestore talks to your live project.
 
+## Demo
+<video src="docs/Screen_recording_20251206_231157.mp4" width="720" controls muted playsinline>
+  Your browser does not support embedded videos. You can download it
+  <a href="docs/Screen_recording_20251206_231157.mp4">here</a>.
+</video>
+
 ## Prerequisites
 - Flutter SDK (matching the version in `pubspec.lock`)
 - Firebase CLI (for emulators / deploys)
@@ -51,12 +57,6 @@ flutter run
   - Calls Hugging Face Inference router with `HF_TOKEN` and `HF_MODEL_ID`.
   - Uses img2img settings tuned to preserve the subject and returns one generated image (base64) per call.
   - The app calls this four times in parallel and stores results in Storage + Firestore.
-
-## Demo
-<video src="docs/Screen_recording_20251206_231157.webm" width="640" controls muted playsinline>
-  Your browser does not support embedded videos. You can download it
-  <a href="docs/Screen_recording_20251206_231157.webm">here</a>.
-</video>
 
 ## Deploying
 - Functions:
