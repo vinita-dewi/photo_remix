@@ -1,4 +1,4 @@
-# photo_remix
+# Photo Remix
 
 Flutter app that lets a signed-in Firebase user upload an image, call a Cloud Function to generate transformed images via Hugging Face Inference, and view the generated results. Storage uses the Firebase Storage emulator; Firestore talks to your live project.
 
