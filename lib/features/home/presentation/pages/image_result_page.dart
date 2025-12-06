@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:photo_remix/core/theme/app_colors.dart';
@@ -67,7 +68,8 @@ class ImageResultPage extends StatelessWidget {
                 Gap.h(20),
                 Expanded(
                   child: GridView.builder(
-                    itemCount: 4,
+                    itemCount:
+                        generatedUrls.isNotEmpty ? generatedUrls.length : 4,
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 2,
@@ -75,15 +77,31 @@ class ImageResultPage extends StatelessWidget {
                           crossAxisSpacing: 12,
                         ),
                     itemBuilder: (context, index) {
-                      final hasGenerated =
-                          generatedUrls.isNotEmpty &&
-                          index < generatedUrls.length;
-                      final widget = hasGenerated
-                          ? Image.network(
-                              generatedUrls[index],
-                              fit: BoxFit.cover,
-                            )
-                          : Image.file(image, fit: BoxFit.cover);
+                      if (index >= generatedUrls.length) {
+                        return ClipRRect(
+                          borderRadius: borderRadius,
+                          child: Container(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest,
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final widget = CachedNetworkImage(
+                        imageUrl: generatedUrls[index],
+                        fit: BoxFit.cover,
+                        placeholder: (context, _) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                        errorWidget: (context, _, __) => const Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.redAccent,
+                        ),
+                      );
                       return ClipRRect(
                         borderRadius: borderRadius,
                         child: Container(
