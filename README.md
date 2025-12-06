@@ -53,7 +53,10 @@ flutter run
   - The app calls this four times in parallel and stores results in Storage + Firestore.
 
 ## Demo
-[Screen recording 2025-12-06](docs/Screen_recording_20251206_231157.webm)
+<video src="docs/Screen_recording_20251206_231157.webm" width="640" controls muted playsinline>
+  Your browser does not support embedded videos. You can download it
+  <a href="docs/Screen_recording_20251206_231157.webm">here</a>.
+</video>
 
 ## Deploying
 - Functions:
