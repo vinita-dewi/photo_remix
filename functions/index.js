@@ -4,17 +4,11 @@
 const functions = require('firebase-functions');
 const { onCall } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-const externalApiKey = defineSecret('EXTERNAL_API_KEY');
-const STUB_IMAGES = [
-  'https://images.unsplash.com/photo-1503023345310-bd7c1de61c7d',
-  'https://images.unsplash.com/photo-1498050108023-c5249f4df085',
-  'https://images.unsplash.com/photo-1511765224389-37f0e77cf0eb',
-  'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee',
-];
+// Secret for the inference provider (Hugging Face Inference API token).
+const hfToken = defineSecret('HF_TOKEN');
 
-exports.generateImage = onCall({ secrets: [externalApiKey] }, async (request) => {
+exports.generateImage = onCall({ secrets: [hfToken] }, async (request) => {
   const { data, auth } = request || {};
   const { category, imageBase64, mimeType } = data || {};
 
@@ -33,32 +27,17 @@ exports.generateImage = onCall({ secrets: [externalApiKey] }, async (request) =>
     );
   }
 
-  const apiKey = externalApiKey.value();
-  const useStub = !apiKey || process.env.USE_STUB === 'true';
-
-  // Stub mode: return placeholder images so the flow works without billing/key.
-  if (useStub) {
-    functions.logger.warn('Using stub images (no API key or USE_STUB=true)');
-    return {
-      count: STUB_IMAGES.length,
-      images: STUB_IMAGES.map((url) => ({
-        base64: null,
-        mimeType: 'image/jpeg',
-        url,
-      })),
-      stub: true,
-    };
+  const token = hfToken.value();
+  if (!token) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'HF_TOKEN is not configured'
+    );
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: 'models/gemini-2.0-flash',
-    generationConfig: { candidateCount: 4 },
-  });
-
-  const prompt = `You are an advanced image-editing model (Nano Banana / Gemini 2.5 Flash Image).
-
-Task:
+  const modelId =
+    process.env.HF_MODEL_ID || 'stabilityai/stable-diffusion-xl-base-1.0';
+  const prompt = `Task:
 - Use the provided image as the base reference.
 - Transform it into the visual style of the category: "${category}".
 - Preserve the main subject and its structure so it stays recognizable.
@@ -67,40 +46,59 @@ Task:
 - Return exactly four edited image`;
 
   try {
-    const response = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                data: imageBase64,
-                mimeType: mimeType || 'image/jpeg',
-              },
-            },
-          ],
+    const response = await fetch(
+      `https://router.huggingface.co/hf-inference/models/${modelId}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      ],
-    });
-
-    const images = [];
-    const candidates = response?.response?.candidates || [];
-    for (const cand of candidates) {
-      const parts = cand?.content?.parts || [];
-      for (const part of parts) {
-        if (part.inlineData?.data) {
-          images.push({
-            base64: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || mimeType || 'image/jpeg',
-          });
-        }
+        body: JSON.stringify({
+          inputs: prompt,
+          image: imageBase64, // base64 without data: prefix
+          parameters: {
+            num_images: 1,
+            // Lower strength/guidance to preserve the source subject.
+            strength: 0.35,
+            guidance_scale: 3.0,
+            num_inference_steps: 10,
+          },
+        }),
       }
-      if (images.length >= 4) break;
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(
+        `HF inference failed: ${response.status} ${errText}`
+      );
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    let images = [];
+
+    if (contentType.includes('application/json')) {
+      const body = await response.json();
+      const rawImages = (body?.images ?? body ?? []).slice(0, 1);
+      images = rawImages
+        .map((img) => ({
+          base64: typeof img === 'string' ? img : img?.base64,
+          mimeType: mimeType || 'image/png',
+        }))
+        .filter((img) => img.base64);
+    } else {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      images = [
+        {
+          base64: buffer.toString('base64'),
+          mimeType: contentType.split(';')[0] || mimeType || 'image/png',
+        },
+      ];
     }
 
     if (images.length === 0) {
-      throw new Error('No images returned from Gemini.');
+      throw new Error('No images returned from inference provider.');
     }
 
     return {
@@ -108,10 +106,18 @@ Task:
       images,
     };
   } catch (err) {
-    functions.logger.error('generateImage failed', err);
-    throw new functions.https.HttpsError(
-      'internal',
-      err.message || 'Image generation failed'
-    );
+    const msg =
+      typeof err === 'string'
+        ? err
+        : err?.message ||
+          err?.response ||
+          err?.toString() ||
+          'Image generation failed';
+    functions.logger.error('generateImage failed', {
+      message: msg,
+      model: modelId,
+      hasToken: !!token,
+    });
+    throw new functions.https.HttpsError('internal', msg, { message: msg });
   }
 });
