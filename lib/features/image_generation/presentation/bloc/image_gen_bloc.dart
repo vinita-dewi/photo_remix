@@ -23,12 +23,12 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
   final FirebaseFunctions _functions;
 
   ImageGenBloc({ImagePicker? picker})
-    : _picker = picker ?? ImagePicker(),
-      _auth = FirebaseAuth.instance,
-      _storage = FirebaseStorage.instance,
-      _firestore = FirebaseFirestore.instance,
-      _functions = FirebaseFunctions.instance,
-      super(ImageGenState.initial()) {
+      : _picker = picker ?? ImagePicker(),
+        _auth = FirebaseAuth.instance,
+        _storage = FirebaseStorage.instance,
+        _firestore = FirebaseFirestore.instance,
+        _functions = FirebaseFunctions.instance,
+        super(ImageGenState.initial()) {
     on<PickFromGallery>(_onPickFromGallery);
     on<PickFromCamera>(_onPickFromCamera);
     on<ImagePicked>(_onImagePicked);
@@ -141,45 +141,68 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
       );
       emit(state.copyWith(originalImageId: originalDocId));
 
-      // 3) Call Cloud Function to generate new images
-      final generatedImageBytes = await _generateImagesFromFunction(
-        category: state.categoryName ?? state.categoryId ?? '',
-        baseImageBytes: originalBytes,
-        mimeType: mimeType,
+      // 3) Kick off 4 parallel generations/uploads/saves
+      final tasks = List<Future<String>>.generate(
+        4,
+        (index) async {
+          final generatedImage = await _generateSingleImageFromFunction(
+            category: state.categoryName ?? state.categoryId ?? '',
+            baseImageBytes: originalBytes,
+            mimeType: mimeType,
+          );
+
+          final ext = _extensionFromMime(generatedImage.mimeType);
+          final fileName = '${originalDocId}_$index$ext';
+          final url = await _uploadImage(
+            'generated',
+            user.uid,
+            bytes: generatedImage.bytes,
+            fileNameOverride: fileName,
+            directory: 'generated_images',
+          );
+
+          await _saveGeneratedImageRecord(
+            userId: user.uid,
+            originalImageId: originalDocId,
+            categoryId: state.categoryId!,
+            categoryName: state.categoryName ?? '',
+            url: url,
+          );
+
+          return url;
+        },
       );
 
-      // 4) Upload generated images to storage
-      final generatedUrls = await _uploadGeneratedImages(
-        generatedImageBytes,
-        user.uid,
-        originalDocId,
-        mimeType,
-      );
+      var firstDone = false;
+      for (final task in tasks) {
+        task.then((url) {
+          final updated = List<String>.from(state.generatedImageUrls)..add(url);
+          if (!firstDone) {
+            firstDone = true;
+            emit(
+              state.copyWith(
+                generatedImageUrls: updated,
+                isLoading: false,
+                isGenerating: false,
+                showResult: true,
+              ),
+            );
+          } else {
+            emit(state.copyWith(generatedImageUrls: updated));
+          }
+        }).catchError((e, s) {
+          _log.e('generate slot failed', error: e, stackTrace: s);
+          emit(
+            state.copyWith(
+              isLoading: false,
+              isGenerating: false,
+              error: e.toString(),
+            ),
+          );
+        });
+      }
 
-      // 5) Save generated image records
-      await _saveGeneratedImagesRecords(
-        userId: user.uid,
-        originalImageId: originalDocId,
-        categoryId: state.categoryId!,
-        categoryName: state.categoryName ?? '',
-        urls: generatedUrls,
-      );
-
-      // 6) Fetch generated images for display
-      final fetched = await _fetchGeneratedImages(
-        userId: user.uid,
-        originalImageId: originalDocId,
-      );
-
-      emit(
-        state.copyWith(
-          isLoading: false,
-          showResult: true,
-          isGenerating: false,
-          generatedImageUrls: fetched,
-          originalImageId: originalDocId,
-        ),
-      );
+      await Future.wait(tasks);
     } catch (e, s) {
       _log.e('generate image failed', error: e, stackTrace: s);
       emit(
@@ -234,20 +257,16 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
       final task = ref.putData(data, metadata);
       final snapshot = await task.timeout(
         const Duration(seconds: 20),
-        onTimeout:
-            () =>
-                throw Exception(
-                  'Upload timed out. Is the storage emulator running?',
-                ),
+        onTimeout: () => throw Exception(
+          'Upload timed out. Is the storage emulator running?',
+        ),
       );
 
       final downloadUrl = await snapshot.ref.getDownloadURL().timeout(
         const Duration(seconds: 10),
-        onTimeout:
-            () =>
-                throw Exception(
-                  'Download URL timed out. Is the storage emulator reachable?',
-                ),
+        onTimeout: () => throw Exception(
+          'Download URL timed out. Is the storage emulator reachable?',
+        ),
       );
 
       _log.i('Upload complete. downloadUrl: $downloadUrl');
@@ -276,46 +295,24 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
         .then((ref) => ref.id);
   }
 
-  Future<void> _saveGeneratedImagesRecords({
+  Future<void> _saveGeneratedImageRecord({
     required String userId,
     required String originalImageId,
     required String categoryId,
     required String categoryName,
-    required List<String> urls,
+    required String url,
   }) async {
-    final batch = _firestore.batch();
-    for (final url in urls) {
-      final docRef = _firestore.collection('Generated Image').doc();
-      batch.set(docRef, {
-        'userId': userId,
-        'originalImageId': originalImageId,
-        'imageUrl': url,
-        'categoryId': categoryId,
-        'categoryName': categoryName,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    }
-    await batch.commit();
+    await _firestore.collection('Generated Image').add({
+      'userId': userId,
+      'originalImageId': originalImageId,
+      'imageUrl': url,
+      'categoryId': categoryId,
+      'categoryName': categoryName,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
   }
 
-  Future<List<String>> _fetchGeneratedImages({
-    required String userId,
-    required String originalImageId,
-  }) async {
-    final snap =
-        await _firestore
-            .collection('Generated Image')
-            .where('userId', isEqualTo: userId)
-            .where('originalImageId', isEqualTo: originalImageId)
-            .orderBy('createdAt', descending: false)
-            .get();
-    return snap.docs
-        .map((d) => (d.data()['imageUrl'] ?? '') as String)
-        .where((url) => url.isNotEmpty)
-        .toList();
-  }
-
-  Future<List<_GeneratedImage>> _generateImagesFromFunction({
+  Future<_GeneratedImage> _generateSingleImageFromFunction({
     required String category,
     required Uint8List baseImageBytes,
     required String mimeType,
@@ -333,40 +330,13 @@ class ImageGenBloc extends Bloc<ImageGenEvent, ImageGenState> {
       throw Exception('No images returned from generator');
     }
 
-    return images.map<_GeneratedImage>((dynamic item) {
-      final map = item as Map?;
-      final b64 = map?['base64'] as String? ?? '';
-      if (b64.isEmpty) {
-        throw Exception('Generated image payload missing data');
-      }
-      final mt = map?['mimeType'] as String? ?? mimeType;
-      return _GeneratedImage(bytes: base64Decode(b64), mimeType: mt);
-    }).toList();
-  }
-
-  Future<List<String>> _uploadGeneratedImages(
-    List<_GeneratedImage> images,
-    String userId,
-    String originalImageId,
-    String mimeType,
-  ) async {
-    final urls = <String>[];
-    for (var i = 0; i < images.length; i++) {
-      final img = images[i];
-      final ext = _extensionFromMime(
-        img.mimeType.isNotEmpty ? img.mimeType : mimeType,
-      );
-      final fileName = '${originalImageId}_$i$ext';
-      final url = await _uploadImage(
-        'generated',
-        userId,
-        bytes: img.bytes,
-        fileNameOverride: fileName,
-        directory: 'generated_images',
-      );
-      urls.add(url);
+    final map = images.first as Map?;
+    final b64 = map?['base64'] as String? ?? '';
+    if (b64.isEmpty) {
+      throw Exception('Generated image payload missing data');
     }
-    return urls;
+    final mt = map?['mimeType'] as String? ?? mimeType;
+    return _GeneratedImage(bytes: base64Decode(b64), mimeType: mt);
   }
 
   String _inferMimeType(String path) {
